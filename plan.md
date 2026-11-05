@@ -5,10 +5,14 @@ Stand: 05.11.2026
 ## Aktueller Projektstand
 
 - Versionsverwaltung: Git, Branch `main`, Remote `origin` unter https://github.com/meuse24/sb.git. Anwendungscode, SQL und Dokumentation werden hier versioniert; Zugangsdaten bleiben lokal.
+- PHP-Grundgerüst unter https://meuse24.info/supabase-test/public/ bereitgestellt, ohne bestehende Website-Dateien zu überschreiben. Übertragung per FTPS mit Zertifikatsprüfung.
+- Hosting-Test erfolgreich: Seite HTTP 200, Session bleibt erhalten, Auth-API liefert HTTP 200. Secure-/HttpOnly-/SameSite=Lax-Cookie geprüft; ungültiger CSRF-Token ergibt HTTP 403, erneuter Verbindungstest innerhalb von zehn Sekunden HTTP 429.
+- Direkter HTTP-Zugriff auf `app/` und `config/` einschließlich lokaler Konfiguration ergibt HTTP 403. Der Zugriffsschutz wurde vor dem Upload der Konfiguration mit harmlosen Probe-Dateien geprüft.
+- Eine visuelle Browserprüfung war in der Arbeitsumgebung mangels verfügbarem Browser nicht möglich. HTTP-Antworten und die vollständigen Formularabläufe wurden direkt geprüft.
 - Supabase-Projekt laut Benutzer angelegt; Projekt-URL und Publishable Key liegen lokal in `supabase.txt` vor.
 - Lokaler HTTPS-Test gegen `/auth/v1/settings` mit dem Publishable Key erfolgreich: HTTP 200.
 - E-Mail-Anmeldung ist aktiviert; E-Mail-Adressen werden nicht automatisch bestätigt. Für den ersten Login einen bestätigten Testbenutzer im Dashboard anlegen.
-- Dieser Test lief vom Entwicklungsrechner aus. Die Verbindung vom World4You-Webspace und die Datenbankrechte wurden damit noch nicht geprüft.
+- Der erste Test lief vom Entwicklungsrechner aus; inzwischen ist auch die Verbindung vom World4You-Webspace bestätigt. Datenbankrechte und Benutzeranmeldung werden in den nächsten Etappen geprüft.
 - `.gitignore` schließt `ftp.txt`, `supabase.txt` und lokale Anwendungskonfiguration aus. Beim Datei-Upload diese Dateien ebenfalls ausschließen; `.gitignore` schützt nicht vor FTP-Uploads.
 
 ## Ziel
@@ -31,7 +35,7 @@ Die öffentlich erreichbare Seite https://meuse24.info/phpinfo.php wurde am 05.1
 | PDO-Treiber | mysql, sqlite | Kein PostgreSQL-PDO-Treiber aufgeführt |
 | Lokale FTP-Zugangsdaten | `ftp.txt` vorhanden und nicht leer | Bei der späteren Bereitstellung verwenden |
 
-Noch offen: ausgehende HTTPS-Verbindung vom World4You-Webspace zum konkreten Supabase-Projekt, Schreibbarkeit des Session-Verzeichnisses im praktischen Betrieb, Zielverzeichnis und verfügbare verschlüsselte Dateiübertragung. Aus phpinfo allein folgt noch kein erfolgreicher Verbindungstest zu Supabase.
+Inzwischen praktisch bestätigt: ausgehende HTTPS-Verbindung zu Supabase, funktionierende PHP-Sessions und FTPS-Upload. Zielverzeichnis ist `supabase-test`, die öffentliche Seite liegt darin unter `public/`. Die Ordner `app/` und `config/` liegen ebenfalls innerhalb des Webspace und sind durch geprüfte Apache-Zugriffssperren geschützt.
 
 Zugangsdaten werden nicht in diesen Plan kopiert. `ftp.txt`, lokale Konfiguration und Datenbankpasswort gehören weder ins Repository noch in einen öffentlich erreichbaren Upload. Die phpinfo-Datei nach Abschluss der Diagnose entfernen oder vor öffentlichem Zugriff schützen, da sie interne Konfiguration offenlegt.
 
@@ -165,7 +169,7 @@ Nach jeder Etappe kurz festhalten: Was wurde gebaut? Welche Anfrage läuft wohin
 
 ## Nächster konkreter Schritt
 
-Als Nächstes das PHP-Grundgerüst mit lokaler Konfiguration und einem begrenzten HTTPS-Verbindungstest vom World4You-Webspace aus bauen. Danach einen bestätigten Testbenutzer im Dashboard anlegen und den Login umsetzen. Das Supabase-Projekt ist bereits angelegt und vom Entwicklungsrechner erreichbar.
+Als Nächstes einen bestätigten Testbenutzer im Supabase-Dashboard anlegen und Login, geschützte Seite und Logout umsetzen. PHP-Grundgerüst, lokale Konfiguration, Hosting-Verbindungstest und Session-Test sind bereits erfolgreich bereitgestellt. Anmeldung und Profiltabelle sind noch nicht implementiert.
 
 ## Quellen
 
