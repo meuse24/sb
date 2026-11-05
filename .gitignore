@@ -1,0 +1,10 @@
+# Lokale Zugangsdaten und Konfiguration
+/ftp.txt
+/supabase.txt
+/config/config.local.php
+.env
+.env.*
+!.env.example
+
+# Lokale Diagnose und Logs
+*.log
