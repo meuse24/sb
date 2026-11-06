@@ -1,184 +1,248 @@
-# Lernprojekt: Supabase mit PHP auf World4You
+# Lernprojekt: Eigene PHP-Anmeldung mit PostgreSQL bei Supabase
 
 Stand: 05.11.2026
 
-## Aktueller Projektstand
+## Entscheidung und Ziel
 
-- Versionsverwaltung: Git, Branch `main`, Remote `origin` unter https://github.com/meuse24/sb.git. Anwendungscode, SQL und Dokumentation werden hier versioniert; Zugangsdaten bleiben lokal.
-- PHP-Grundgerüst unter https://meuse24.info/supabase-test/public/ bereitgestellt, ohne bestehende Website-Dateien zu überschreiben. Übertragung per FTPS mit Zertifikatsprüfung.
-- Hosting-Test erfolgreich: Seite HTTP 200, Session bleibt erhalten, Auth-API liefert HTTP 200. Secure-/HttpOnly-/SameSite=Lax-Cookie geprüft; ungültiger CSRF-Token ergibt HTTP 403, erneuter Verbindungstest innerhalb von zehn Sekunden HTTP 429.
-- Direkter HTTP-Zugriff auf `app/` und `config/` einschließlich lokaler Konfiguration ergibt HTTP 403. Der Zugriffsschutz wurde vor dem Upload der Konfiguration mit harmlosen Probe-Dateien geprüft.
-- Eine visuelle Browserprüfung war in der Arbeitsumgebung mangels verfügbarem Browser nicht möglich. HTTP-Antworten und die vollständigen Formularabläufe wurden direkt geprüft.
-- Supabase-Projekt laut Benutzer angelegt; Projekt-URL und Publishable Key liegen lokal in `supabase.txt` vor.
-- Lokaler HTTPS-Test gegen `/auth/v1/settings` mit dem Publishable Key erfolgreich: HTTP 200.
-- E-Mail-Anmeldung ist aktiviert; E-Mail-Adressen werden nicht automatisch bestätigt. Für den ersten Login einen bestätigten Testbenutzer im Dashboard anlegen.
-- Der erste Test lief vom Entwicklungsrechner aus; inzwischen ist auch die Verbindung vom World4You-Webspace bestätigt. Datenbankrechte und Benutzeranmeldung werden in den nächsten Etappen geprüft.
-- `.gitignore` schließt `ftp.txt`, `supabase.txt` und lokale Anwendungskonfiguration aus. Beim Datei-Upload diese Dateien ebenfalls ausschließen; `.gitignore` schützt nicht vor FTP-Uploads.
+Die Anwendung erhält eine eigene `users`-Tabelle mit Passwort-Hashes, wie beim bisherigen MariaDB-Ansatz des Benutzers. PHP übernimmt Passwortprüfung, Anmeldung und Sessions. Supabase wird als PostgreSQL-Anbieter mit HTTPS-Datenzugriff genutzt. Supabase Auth ist nicht mehr Bestandteil der Anwendung.
 
-## Ziel
+Die Website bleibt bei World4You unter https://meuse24.info/supabase-test/public/. Es ist kein Wechsel zu Render beauftragt. Die Unterhaltung über Render diente dem Vergleich der Architekturen.
 
-Eine kleine Testwebsite mit Anmeldung, Abmeldung, geschütztem Bereich und einem bearbeitbaren Benutzerprofil erstellen. Die Website läuft mit PHP bei World4You und wird per Dateiübertragung bereitgestellt. Supabase übernimmt Authentifizierung und PostgreSQL. Jeder Schritt soll nachvollziehbar erklärt und einzeln ausprobiert werden.
+Umgesetzt sind Anmeldung, geschützter Bereich, Abmeldung, bearbeitbarer Anzeigename, Passwortänderung und Registrierung. Zusätzlich ist jetzt eine Admin-Verwaltung aller Benutzer mit CRUD beauftragt. Auf ausdrücklichen Benutzerwunsch ist die E-Mail-Bestätigung vorläufig deaktiviert. Der vorbereitete Mailablauf bleibt optional; SMTP-Einrichtung und Passwort-Zurücksetzen folgen separat.
 
-Erste Version: E-Mail/Passwort-Login und eigene Profildaten. Eine Verwaltungsoberfläche für fremde Benutzer oder Administratorrollen gehört noch nicht dazu. Testbenutzer werden zunächst im Supabase-Dashboard angelegt.
+## Aktueller Stand
 
-## Geprüfte Ausgangslage
+- Admin-Oberfläche auf World4You per FTPS bereitgestellt und dort über HTTPS vollständig abgenommen: anonyme und normale Benutzer gesperrt, CRUD, Suche/Seitenwechsel, Passwort-Neusetzen, Rollen-/Session-Widerruf, Selbstschutz, CSRF und veraltete Formulare. Temporäre Testkonten wurden entfernt. Auch die bestehenden Auth-, Profil- und Passworttests bestehen weiterhin.
+- Der vorhandene Erstzugang aus `config/first-login.local.txt` wurde nach Prüfung der bisherigen Zugangsdaten zum ersten Admin gemacht. Passwort und E-Mail blieben unverändert; `auth_version` wurde zur Abmeldung alter Sitzungen erhöht. Eine erneute Anmeldung als Admin samt Zugriff auf die reale Verwaltung wurde bestätigt.
+- Admin-CRUD implementiert: Liste mit Suche/Seitenwechsel, Anlage, Bearbeitung von E-Mail/Anzeigename/Rolle/Status, optionales Passwort-Neusetzen und endgültiges Löschen nach Bestätigung. `is_admin` ist standardmäßig `false`; normale Registrierungen und Profilformulare können keine Admin-Rechte erzeugen.
+- Migration `004_admin.sql` ist angewandt. PHP prüft die frisch geladene Rolle bei jedem Admin-Aufruf. Interne Datenbankfunktionen prüfen zusätzlich aktive Actor-ID und Session-Version; Browser-Rollen erhalten kein Ausführungsrecht. Gegenläufige Admin-Änderungen werden in einer Transaktionssperre serialisiert. Eigene Deaktivierung, Herabstufung, Löschung und Passwort-Reset über die Admin-Seite sind gesperrt.
+- Datenbanktests und vollständige Admin-Integration gegen die echte Daten-API bestehen: Rechteentzug, CRUD, Passwort-Reset, aktive/inaktive Konten, kein Hash in Antworten, CSRF, Such-/Seitenfunktionen, Konflikterkennung, öffentliche Registrierung ohne Rollenerhöhung und zwei gleichzeitige gegenseitige Herabstufungen mit nur einem Gewinner. Temporäre Testkonten wurden wieder entfernt.
+- Registrierung ohne E-Mail-Bestätigung ist die gewählte aktuelle Variante. `registration_require_email_confirmation=false` erlaubt neue Konten mit E-Mail, Anzeigename, Passwort und Wiederholung; anschließend ist die Anmeldung sofort möglich. Es wird keine Mail verschickt und kein SMTP-Zugang benötigt. Doppelte E-Mail-Adressen dürfen bestehende Konten nicht überschreiben.
+- Diese Variante ist auf World4You bereitgestellt und über HTTPS geprüft: CSRF, Passwortgrenzen und Wiederholung, ignorierte frei übergebene Kontofelder, nicht bestätigte E-Mail-Kennzeichnung, Duplikatsperre und sofortiger Login. Der optionale Bestätigungsendpunkt leitet bei deaktivierter Bestätigung zur Registrierung weiter. Das temporäre Testkonto wurde entfernt; der bestehende Erstzugang blieb unverändert.
+- Die Integrationstests gegen die echte Daten-API bestehen für beide Varianten, einschließlich doppelter/gleichzeitiger Registrierung, persistenter Limits, optionalem Bestätigungsablauf, Replay-/Ablaufschutz und simuliertem Versandfehler. Eine echte E-Mail wurde nicht versandt. Die bestehenden Auth-, Profil- und Passworttests bestehen weiterhin.
+- Migrationen 002 und 003 wurden mit zertifikatsgeprüftem Zugang auf PostgreSQL angewandt. `registration_requests` und die Registrierungsfunktionen sind für Browser-Rollen gesperrt. `users.email_confirmed_at` unterscheidet tatsächlich bestätigte Adressen von Sofortregistrierungen; vorhandene Konten wurden nicht pauschal als bestätigt markiert.
+- Der optionale Bestätigungsablauf ist vorbereitet: Token nur gehasht speichern, 30 Minuten Laufzeit, 60 Sekunden Versandpause, Ersetzung alter Links, atomare Einmalverwendung und Passwortwahl erst durch den Empfänger nach dem Link. Der Fragment-/POST-Übergang hält rohe Tokens aus Server-Zugriffs-URLs heraus. Bei deaktivierter Bestätigung leitet `confirm.php` zur Registrierung weiter.
+- PHPMailer 7.1.1 ist mit Composer-Lockdatei vorbereitet. Der SMTP-Adapter wurde gegen einen lokalen TLS-SMTP-Testserver geprüft, einschließlich Zertifikatsablehnung; dabei wurde keine externe E-Mail versandt. Eine echte SMTP-Konfiguration ist wegen der ausdrücklich deaktivierten Bestätigung derzeit nicht erforderlich. `config/mail.local.php` bleibt eine ignorierte lokale Vorlage.
+- Passwortänderung unter `password.php` umgesetzt: bisheriges Passwort prüfen, neues Passwort wiederholen und serverseitig mindestens 12 Unicode-Zeichen bei höchstens 72 UTF-8-Bytes verlangen. Passwort-Hash und erhöhte `auth_version` werden atomar gespeichert, gebunden an aktive Benutzer-ID, bisherige Version und bisherigen Hash. Dafür war keine Datenbankmigration nötig.
+- Die aktuelle Sitzung erhält nach Passwortänderung eine neue Session-ID und ein neues CSRF-Token; ihre ursprüngliche maximale Laufzeit bleibt erhalten. Andere Sitzungen werden beim nächsten geschützten Aufruf abgewiesen. Die Versuchsbegrenzung bleibt auch nach erneutem Login bestehen: eigener Kontozähler mit 10 Versuchen pro 15 Minuten, gemeinsam genutztes IP-Limit von 50 Versuchen.
+- Integrationstests gegen die echte Daten-API bestehen für falsches/altes/neues Passwort, Wiederholung und Unicode-/Byte-Grenzen, CSRF, fremde Ziel-IDs, Session-Wechsel und Widerruf, Sperren für veraltete/deaktivierte Konten sowie zwei konkurrierende Änderungen mit genau einem Gewinner. Testkonten und zugehörige Zähler wurden entfernt.
+- Auf World4You per FTPS bereitgestellt und über HTTPS abgenommen: Passwortprüfung, Eingabeprüfung/CSRF, Passwortwechsel, neue Session-ID und neues CSRF-Token, Widerruf einer zweiten Sitzung, Ablehnung des alten Passworts und Anmeldung mit dem neuen. Ein anderes Konto blieb unverändert und angemeldet. Temporäre Testkonten wurden entfernt; der vorhandene Erstzugang blieb unverändert.
+- Etappe 3 umgesetzt: Der eigene Anzeigename lässt sich auf `profile.php` ändern oder leeren. Maximal 100 Unicode-Zeichen, CSRF-Schutz und HTML-Escaping. PATCH-Ziel, Kontostatus und Session-Version werden serverseitig festgelegt; frei übergebene Benutzer-IDs oder weitere Kontofelder werden nicht übernommen. Der Integrationstest gegen die echte Daten-API mit zwei temporären Konten besteht, einschließlich Manipulationen in beide Richtungen und Prüfung auf konkurrierenden Session-Widerruf. Testkonten wurden entfernt.
+- Die Profiländerung ist auf World4You bereitgestellt. Der dortige HTTPS-Test mit zwei temporären Konten besteht für Speichern/Leeren, CSRF, Längenprüfung, HTML-Escaping, anonymen Zugriff und manipulierte Ziel-IDs in beide Richtungen. Zusätzliche übergebene Kontofelder bleiben unverändert. Auch diese Testkonten wurden anschließend entfernt; der bestehende Erstzugang wurde nicht verändert.
+- Der Code ist von Supabase Auth auf eigene Passwortprüfung in PHP umgestellt. Access-/Refresh-Tokens und Token-Erneuerung sind entfernt. Der neue Session-Cookie heißt `php_users`; die bisherigen Auth-Sessions werden nicht übernommen.
+- `public.users`, `public.login_attempts` und `public.consume_login_attempt()` wurden mit `sql/001_users.sql` in der tatsächlichen PostgreSQL-Datenbank angelegt. Vorher war das Schema `public` leer. Bestehende Tabellen im Schema `auth` wurden nicht verändert.
+- Der Benutzer hat den benötigten Secret-Key lokal in `config/config.local.php` hinterlegt. Schlüssel und Passwörter werden weder im Plan noch im Repository gespeichert.
+- Datenbanktests auf PostgreSQL 17.11 bestanden: Backend-Rechte, Sperren für `anon`/`authenticated`, RLS, eindeutige und normalisierte E-Mail-Adressen, E-Mail-/IP-Begrenzung und deren Ablauf. Alle Testdaten wurden zurückgerollt.
+- Der Integrationstest mit PHP 8.5.12 gegen die echte Supabase-Daten-API bestand: Benutzeranlage per CLI, Passwortprüfung, Hash-Erneuerung, CSRF, Session-Wechsel, Cookie-Attribute, Escaping, Ablauf, Kontodeaktivierung, Session-Widerruf, Logout bei Backendausfall und Limits trotz Cookie-Löschung. Das zufällig angelegte Testkonto und seine Test-Buckets wurden entfernt.
+- Die HTTPS-Version wurde per FTPS auf World4You bereitgestellt und mit einem eigenen Benutzer erfolgreich abgenommen: richtiger/falscher Login, Session-Erhalt und -Wechsel, Cookie-Attribute, CSRF, Wiederholungsbegrenzung, direkter Zugriffsschutz, Logout und Datenbanktest. Direkter HTTP-Zugriff auf Anwendungshilfen und Konfiguration liefert weiterhin 403. CLI und Tests sind nicht hochgeladen.
+- Ein erster nutzbarer Testbenutzer wurde in `public.users` angelegt. Seine zufällig erzeugten Zugangsdaten stehen ausschließlich lokal in `config/first-login.local.txt`; die Datei wird ignoriert und wurde nicht hochgeladen. `app/supabase.php` ist lokal und auf dem Webspace entfernt.
+- Projektordner aufgeräumt: benötigte FTP- und Datenbankzugangsdaten liegen jetzt in `config/ftp.local.txt` und `config/database.local.txt`. Die früheren Dateien im Projektstamm sind entfernt; überholte Publishable-Key- und CLI-Notizen wurden verworfen. Alle `config/*.local.*` bleiben von Git ausgeschlossen. Anwendung, SQL, CLI-Werkzeug und Tests sind erhalten.
+- Git: Branch `main`, Remote `origin` unter https://github.com/meuse24/sb.git. Anwendungscode, SQL und Dokumentation werden versioniert; Zugangsdaten bleiben lokal.
 
-Die öffentlich erreichbare Seite https://meuse24.info/phpinfo.php wurde am 05.11.2026 abgerufen.
+## Hosting und gewählter Zugang
 
-| Eigenschaft | Befund | Bedeutung |
-| --- | --- | --- |
-| PHP | 8.4.26 | Für das Projekt geeignet |
-| cURL | Aktiviert, Version 8.22.0 | PHP kann grundsätzlich HTTP-Anfragen ausführen |
-| OpenSSL | Aktiviert | Grundlage für verschlüsselte Verbindungen vorhanden |
-| PHP-Sessions | Modul und dateibasierter Handler vorhanden; Cookies aktiviert | Voraussetzungen für serverseitige Sessions vorhanden |
-| Session-Autostart | Aus | Die Anwendung startet Sessions selbst |
-| PDO-Treiber | mysql, sqlite | Kein PostgreSQL-PDO-Treiber aufgeführt |
-| Lokale FTP-Zugangsdaten | `ftp.txt` vorhanden und nicht leer | Bei der späteren Bereitstellung verwenden |
+Die erneute Prüfung von https://meuse24.info/phpinfo.php zeigt PDO-Treiber `mysql, sqlite`. `pdo_pgsql` ist auf dem Webspace derzeit nicht vorhanden. Es lässt sich dort nicht durch Anwendungscode aktivieren; Installation oder Freischaltung liegen beim Hostinganbieter. Der Benutzer hat ausdrücklich **HTTPS mit eigener users-Tabelle** gewählt.
 
-Inzwischen praktisch bestätigt: ausgehende HTTPS-Verbindung zu Supabase, funktionierende PHP-Sessions und FTPS-Upload. Zielverzeichnis ist `supabase-test`, die öffentliche Seite liegt darin unter `public/`. Die Ordner `app/` und `config/` liegen ebenfalls innerhalb des Webspace und sind durch geprüfte Apache-Zugriffssperren geschützt.
+Vorhanden und praktisch geprüft sind PHP 8.4, cURL, Sessions und ausgehendes HTTPS zu Supabase. Der neue Datenbankzugriff nutzt cURL zur PostgREST-Daten-API mit Zertifikatsprüfung, Zeitlimits und abgeschirmten Fehlermeldungen. Weder ein PostgreSQL-PDO-Treiber noch ein direkter Datenbankport sind dafür auf dem Webspace nötig.
 
-Zugangsdaten werden nicht in diesen Plan kopiert. `ftp.txt`, lokale Konfiguration und Datenbankpasswort gehören weder ins Repository noch in einen öffentlich erreichbaren Upload. Die phpinfo-Datei nach Abschluss der Diagnose entfernen oder vor öffentlichem Zugriff schützen, da sie interne Konfiguration offenlegt.
+Vom Entwicklungsrechner war zusätzlich ein direkter PostgreSQL-Zugang mit den vorhandenen lokalen Datenbankdaten und `sslmode=verify-full` möglich. Dieser wurde ausschließlich für Schemaeinrichtung und Datenbanktests verwendet. Die Webanwendung nutzt HTTPS.
 
-## Architektur und Begriffe
+`app/` und `config/` liegen beim vorhandenen Hostingaufbau ebenfalls im Webspace. Geprüfte `.htaccess`-Sperren schützen sie vor HTTP-Zugriffen. FTPS erfolgt mit Zertifikatsprüfung. Andere Website-Dateien werden nicht überschrieben. Eine öffentliche phpinfo-Datei sollte nach Abschluss der Diagnose entfernt oder geschützt werden.
+
+## Architektur und Datenfluss
 
 ```text
 Browser
-  | HTTPS: Formular und Session-Cookie
+  | HTTPS: E-Mail/Passwort-Formular, CSRF-Token, Session-Cookie
   v
 PHP bei World4You
-  | HTTPS: Auth-API und Daten-API
+  +-- Eingaben prüfen und E-Mail normalisieren
+  +-- Anmeldeversuche begrenzen
+  +-- password_verify() / password_needs_rehash()
+  +-- Session erstellen, prüfen und beenden
+  |
+  | HTTPS: serverseitiger Secret-Key
   v
-Supabase Cloud
-  +-- Auth: Benutzer, Passwortprüfung, Tokens
-  +-- PostgreSQL: eigene Profildaten und Zugriffsregeln
+Supabase-Daten-API / PostgREST
+  |
+  v
+PostgreSQL
+  +-- public.users
+  +-- public.login_attempts
+  +-- public.consume_login_attempt()
 ```
 
-- Supabase wird als gehosteter Dienst genutzt; auf dem Webspace wird kein Supabase-Server installiert.
-- PHP ruft Supabase per cURL über HTTPS auf. Ein direkter PostgreSQL-Zugang ist dafür nicht erforderlich.
-- Die PHP-Session verbindet den Browser mit dem PHP-Backend. Im Browser liegt nur die zufällige Session-ID als Cookie.
-- Die Supabase-Session besteht aus Access Token und Refresh Token. Diese bleiben in der serverseitigen PHP-Session.
-- Das Access Token weist gegenüber Supabase den angemeldeten Benutzer nach. Das Refresh Token dient zur Erneuerung ablaufender Tokens.
-- Ein Projektschlüssel identifiziert die Anwendung, nicht den Benutzer. Für normale Benutzerzugriffe werden Publishable Key und Benutzer-Access-Token verwendet.
-- Row Level Security (RLS) legt auf Datenbankebene fest, welche Zeilen ein Benutzer lesen oder ändern darf.
+- Die eigene UUID bleibt unabhängig von Supabase Auth. Weitere Anwendungstabellen werden auf `public.users.id` verweisen, nicht auf `auth.users.id`.
+- E-Mail und Passwort gelangen über HTTPS an PHP. Das Passwort wird nur während der Prüfung verarbeitet, nicht protokolliert oder in der Session gespeichert.
+- Der Passwort-Hash wird ausschließlich im PHP-Backend aus der Datenbank gelesen. Der Browser erhält weder Hash noch Secret-Key.
+- Die PHP-Session enthält nur eigene Benutzer-ID, `auth_version` und Zeitstempel. Der Browser besitzt nur die zufällige Session-ID als Secure-/HttpOnly-/SameSite=Lax-Cookie.
+- Logout beendet die lokale Session und entfernt das Cookie; ein Supabase-Logout ist nicht mehr erforderlich.
+- Supabase-Auth-Konten und unsere eigenen Anwendungskonten sind getrennt. Ein im Dashboard unter Authentication → Users angelegter Benutzer kann sich damit nicht automatisch bei unserer Website anmelden.
 
-## Schritt 1: Supabase-Konto und Projekt anlegen
+## Datenmodell und Zugriffsschutz
 
-- [ ] Ein Konto unter https://supabase.com erstellen.
-- [ ] Eine Organisation im Free-Tarif und darin ein Projekt anlegen, beispielsweise `php-login-test`.
-- [ ] Eine angebotene EU-Region wählen, möglichst nahe am Hostingstandort.
-- [ ] Ein starkes Datenbankpasswort im Passwortmanager speichern. Für die geplanten HTTPS-Aufrufe benötigt die Website dieses Passwort nicht.
-- [ ] Projekt-URL und Publishable Key aus dem Dashboard für die lokale Anwendungskonfiguration bereithalten.
-- [ ] E-Mail/Passwort als Anmeldeverfahren prüfen.
-- [ ] Zunächst einen bestätigten Testbenutzer im Dashboard anlegen; später einen zweiten für die Zugriffstests.
+`public.users`:
 
-Der Free-Tarif reicht für den Einstieg. Laut aktueller Preisübersicht können Free-Projekte nach einer Woche Inaktivität pausiert werden. Projektpasswort, Konto-Passwort und privilegierte Secret-Keys müssen nicht im Chat geteilt werden.
+| Feld | Zweck |
+| --- | --- |
+| `id` | Eigene UUID, Primärschlüssel |
+| `email` | Kleingeschriebene, eindeutige E-Mail-Adresse, maximal 254 Zeichen |
+| `password_hash` | PHP-Passwort-Hash, kein Klartext |
+| `display_name` | Anzeigename, maximal 100 Zeichen |
+| `is_active` | Konto deaktivieren, ohne Datensätze zu löschen |
+| `is_admin` | Serverseitig geprüfte Berechtigung zur Verwaltung aller Konten; standardmäßig `false` |
+| `auth_version` | Bestehende Sessions nach Passwortänderung oder Widerruf ungültig machen |
+| `created_at` | Erstellungszeitpunkt mit Zeitzone |
+| `email_confirmed_at` | Tatsächlicher Bestätigungszeitpunkt; `NULL` bei aktueller Sofortregistrierung oder manueller Anlage |
 
-Lernziel: Supabase-Konto, Projekt, Anwendungsbenutzer und Datenbankbenutzer unterscheiden können.
+Die Tabellen haben RLS aktiviert. `anon` und `authenticated` besitzen keine Tabellenrechte und keine passenden Policies. Die interne RPC-Funktion ist für diese Rollen ebenfalls gesperrt. Nur das vertrauenswürdige PHP-Backend greift mit dem Secret-Key als `service_role` darauf zu. Dieser Schlüssel umgeht RLS; deshalb prüft PHP den angemeldeten Benutzer und dessen Berechtigungen selbst.
 
-## Schritt 2: PHP-Grundgerüst und Verbindung prüfen
+Die frühere Planung mit `auth.uid()`-Policies passt nicht mehr: Eine reine PHP-Session stellt keinen Supabase-Benutzer-JWT bereit. Wir dürfen die eigenen Tabellen deshalb keinesfalls mit einer allgemeinen Browser-Policy freigeben. Der Zugriffsschutz für Profiländerungen liegt im PHP-Backend: Benutzer-ID immer aus der geprüften Session, niemals frei aus dem Formular übernehmen.
 
-- [ ] Ein eigenes Unterverzeichnis für die Testwebsite auf dem Webspace festlegen, damit vorhandene Inhalte erhalten bleiben.
-- [ ] Kleine PHP-Anwendung ohne Framework und ohne Build-Prozess vorbereiten.
-- [ ] Eine zentrale cURL-Funktion für JSON-Anfragen schreiben: Zertifikatsprüfung, Verbindungs- und Gesamtzeitlimit, HTTP-Status und Fehlerbehandlung.
-- [ ] Supabase-Konfiguration außerhalb des öffentlichen Webverzeichnisses ablegen und aus PHP laden. Den tatsächlichen Webspace-Aufbau vorher prüfen.
-- [ ] Einen begrenzten Verbindungstest vom Webspace aus durchführen. Erwarteten HTTP-Status und Antwortstruktur prüfen; keine Tokens oder Zugangsdaten ausgeben.
-- [ ] Session-Cookie über zwei aufeinanderfolgende Seitenaufrufe praktisch prüfen.
+Die Anmeldebegrenzung speichert SHA-256-Buckets für normalisierte E-Mail und IP. Pro 15-Minuten-Fenster sind 10 Versuche pro E-Mail und 50 pro IP erlaubt, einschließlich erfolgreicher Versuche. Die PostgreSQL-Funktion aktualisiert beide Zähler atomar; Cookie-Löschung setzt sie nicht zurück. Buckets älter als 24 Stunden werden bei späteren Versuchen gelöscht. Zusätzlich gilt eine Pause von drei Sekunden pro PHP-Session.
 
-Lernziel: HTTP-Anfrage, JSON-Antwort, API-Schlüssel und PHP-Session verstehen.
+## Etappe 1: Schema und HTTPS-Zugriff
 
-## Schritt 3: Login, geschützte Seite und Logout
+- [x] Reproduzierbare Migration `sql/001_users.sql` erstellen und anwenden.
+- [x] Eigene UUIDs und Passwort-Hashes ohne Abhängigkeit von `auth.users` vorsehen.
+- [x] Tabellenrechte und RLS gegen Browserzugriffe absichern.
+- [x] Secret-Key ausschließlich lokal und im geschützten Backend konfigurieren.
+- [x] HTTPS-Adapter hinter einer eigenen `UserStore`-Schnittstelle kapseln.
+- [x] Reale Datenbankrechte und Limits mit zurückgerollten Testdaten prüfen.
 
-- [ ] Ein E-Mail/Passwort-Formular erstellen und per POST an PHP senden.
-- [ ] Formulare mit CSRF-Token schützen; Eingaben prüfen und Ausgaben HTML-escapen.
-- [ ] PHP meldet den Benutzer über die Supabase-Auth-API an. Passwörter weder lokal speichern noch protokollieren.
-- [ ] Nach erfolgreicher Anmeldung die PHP-Session-ID erneuern und Tokens sowie Ablaufzeit serverseitig speichern.
-- [ ] Session-Cookies mit `Secure`, `HttpOnly` und einem passenden `SameSite`-Wert setzen; nur Cookies als Session-Transport verwenden.
-- [ ] Eine gemeinsame Funktion zum Prüfen der Anmeldung und zum rechtzeitigen Erneuern ablaufender Access Tokens erstellen.
-- [ ] Nach einer Erneuerung sowohl Access Token als auch Refresh Token aktualisieren. Parallele Anfragen berücksichtigen, damit nicht mehrfach dasselbe Refresh Token verwendet wird.
-- [ ] Bei fehlgeschlagener Erneuerung die lokale Session beenden und erneut zur Anmeldung führen.
-- [ ] Eine geschützte Seite serverseitig absichern; nicht allein anhand ausgeblendeter Links oder eines aus dem Browser übergebenen Benutzerobjekts entscheiden.
-- [ ] Logout als geschützte POST-Aktion implementieren: Supabase-Abmeldung anstoßen und lokale Session einschließlich Cookie entfernen.
-- [ ] Eine verständliche eigene Inaktivitätsgrenze festlegen. Logout macht bereits ausgestellte Access Tokens nicht zwangsläufig sofort ungültig; ihre Restlaufzeit beachten.
+Lernziel: Datenbank, Datentransport und Anmeldeverfahren getrennt verstehen.
 
-Lernziel: Anmeldung, Identitätsprüfung, Session-Lebensdauer und Abmeldung auseinanderhalten.
+## Etappe 2: Eigene Anmeldung und erster Benutzer
 
-## Schritt 4: PostgreSQL-Profiltabelle und RLS
+- [x] Benutzeranlage als lokales CLI-Werkzeug `bin/create-user.php` umsetzen.
+- [x] Hashes mit `password_hash(PASSWORD_DEFAULT)` erzeugen; Passwörter nicht als Kommandozeilenargument übergeben.
+- [x] Bei neuer Benutzeranlage mindestens 12 Unicode-Zeichen und höchstens 72 UTF-8-Bytes verlangen; bcrypt darf nichts still abschneiden. Dieselben Regeln gelten für neue Passwörter bei einer Passwortänderung.
+- [x] Login mit `password_verify()` prüfen und veraltete Hashes nach erfolgreicher Prüfung erneuern.
+- [x] Fehlermeldung bei unbekannter E-Mail, falschem Passwort oder deaktiviertem Konto allgemein halten.
+- [x] CSRF, Eingabeprüfung, HTML-Escaping und persistente Begrenzung der Anmeldeversuche umsetzen.
+- [x] Session-ID und CSRF-Token beim Login erneuern.
+- [x] Geschützte Seiten gegen direkte Aufrufe absichern und das Konto bei jedem Zugriff erneut laden.
+- [x] Sessions nach 30 Minuten Inaktivität oder spätestens acht Stunden beenden.
+- [x] Deaktivierte/gelöschte Konten und geänderte `auth_version` zurückweisen.
+- [x] Logout als CSRF-geschützte POST-Aktion auch ohne verfügbares Backend ermöglichen.
+- [x] Vollständigen Ablauf mit einem echten, anschließend entfernten Testkonto über HTTPS prüfen.
+- [x] Online-Version auf dem World4You-Webspace abschließend abnehmen und ersten nutzbaren Testzugang bereitstellen.
 
-- [ ] Eine SQL-Datei für `public.profiles` erstellen: `id` als UUID-Primärschlüssel mit Verweis auf `auth.users(id)`, `display_name` als Text, `created_at` als Zeitstempel.
-- [ ] RLS aktivieren und erforderliche Tabellenrechte ausdrücklich setzen.
-- [ ] Regeln für SELECT, INSERT und UPDATE definieren: Die Benutzer-ID aus dem geprüften Token muss zur Profil-ID passen. Bei UPDATE auch den resultierenden Datensatz mit `WITH CHECK` absichern.
-- [ ] Profil beim ersten angemeldeten Zugriff mit der bestätigten Benutzer-ID anlegen; keine vom Formular frei vorgegebene Benutzer-ID übernehmen.
-- [ ] Profil über die Supabase-Daten-API lesen und bearbeiten. PHP verwendet dafür Publishable Key und Access Token des Benutzers.
-- [ ] Die SQL-Datei als reproduzierbare Beschreibung des Datenbankschemas im Projekt speichern.
+Lernziel: Passwort-Hash, Passwortprüfung, Benutzeridentität und Session-Lebensdauer nachvollziehen.
 
-Für diese Funktionen ist kein Secret-Key und kein alter `service_role`-Key erforderlich. Diese privilegierten Schlüssel umgehen RLS und werden nicht für normale Profilzugriffe eingesetzt.
+## Etappe 3: Eigenes Profil bearbeiten
 
-Lernziel: Fremdschlüssel, API-Zugriff, Tabellenrechte und zeilenbezogene Berechtigungen verstehen.
+- [x] Anzeigenamen auf der geschützten Seite bearbeiten können.
+- [x] Update immer auf die Benutzer-ID aus der geprüften Session begrenzen.
+- [x] Formular mit CSRF schützen und Länge serverseitig prüfen.
+- [x] Mit zwei echten Benutzern nachweisen, dass A weder Lesen noch Ändern von B über manipulierte Anfragen erzwingen kann.
+- [x] Anzeigenamen direkt in `public.users` speichern; eine zusätzliche Profiltabelle ist dafür nicht nötig. Weitere Felder bleiben auf spätere Anforderungen begrenzt.
 
-## Schritt 5: Registrierung und E-Mail-Abläufe ergänzen
+## Etappe 4: Passwortänderung, Registrierung und E-Mail
 
-- [ ] Registrierung als eigene Ausbaustufe hinzufügen.
-- [ ] Site URL und erlaubte Redirect-URLs auf die tatsächliche Testwebsite einstellen.
-- [ ] E-Mail-Bestätigung mit einem für die PHP-Anwendung passenden serverseitigen Callback-Verfahren umsetzen.
-- [ ] Passwort-Zurücksetzen einschließlich Rückkehr zur Website implementieren und testen.
-- [ ] Für E-Mails an beliebige Testadressen einen eigenen SMTP-Versand in Supabase einrichten. Einen vorhandenen World4You-Mailaccount nur verwenden, wenn dessen SMTP-Zugang und Versandvorgaben passen.
+- [x] Passwortänderung mit Prüfung des bisherigen Passworts ergänzen.
+- [x] Nach einer Passwortänderung `auth_version` erhöhen und den gewünschten Session-Widerruf prüfen.
+- [x] Registrierung als eigene Ausbaustufe mit Spam-/Missbrauchsbegrenzung entwickeln; aktuell ohne Bestätigungsmail.
+- [x] Optionale E-Mail-Bestätigung mit kurzlebigen Einmal-Tokens vorbereiten; Tokens nur gehasht speichern. Auf Benutzerwunsch deaktiviert.
+- [ ] Passwort-Zurücksetzen mit Einmal-Token, Ablaufzeit und neutraler Antwort unabhängig vom Vorhandensein der E-Mail implementieren.
+- [ ] Bei späterer Aktivierung eigenen SMTP-Versand konfigurieren und echte Zustellung testen. Der Supabase-Auth-Mailversand übernimmt diese eigenen Abläufe nicht. Derzeit bewusst nicht erforderlich.
 
-Der eingebaute Supabase-Mailversand ist eingeschränkt und liefert standardmäßig nur an vorab zugelassene Teamadressen. Deshalb zunächst mit im Dashboard angelegten, bestätigten Testbenutzern lernen. Den späteren Registrierungsablauf einschließlich E-Mail-Zustellung separat prüfen.
+## Etappe 5: Admin-CRUD
 
-Lernziel: Registrierung, Bestätigung, Login und Passwortwiederherstellung als getrennte Abläufe verstehen.
+- [x] Admin-Rolle mit sicherem Standardwert und Prüfung bei jedem Zugriff ergänzen.
+- [x] Liste mit Suche und Seitenwechsel sowie Lesen einzelner Konten anbieten.
+- [x] Benutzer anlegen, bearbeiten, Passwörter neu setzen und nach Bestätigung löschen können.
+- [x] CSRF und Eingabeprüfung für alle schreibenden Formulare sowie Konfliktprüfung mit `auth_version` umsetzen.
+- [x] Rollenentzug und Deaktivierung beim nächsten Zugriff durchsetzen; Admin-Änderungen widerrufen bestehende Sitzungen.
+- [x] Eigene Löschung/Deaktivierung/Herabstufung verhindern und gleichzeitigen gegenseitigen Rollenentzug testen.
+- [x] Normale Registrierung und Profilbearbeitung gegen Rollenerhöhung absichern.
+- [x] Bestehenden lokalen Erstzugang gezielt als ersten Admin freischalten, bereitstellen und auf World4You abnehmen.
 
-## Geplante Projektstruktur
+## Etappe 6: Anbieterwechsel vorbereiten
+
+- [x] Benutzer-ID und Anmeldelogik unabhängig von Supabase Auth halten.
+- [x] Datenzugriff in einem Adapter kapseln.
+- [ ] Bei einem tatsächlichen Wechsel einen PDO/PostgreSQL-Adapter implementieren und dafür einen eingeschränkten Backend-Datenbankbenutzer einrichten.
+- [ ] Datenexport und Wiederherstellung auf einer zweiten PostgreSQL-Instanz testen, einschließlich UUIDs und Passwort-Hashes.
+- [ ] Anbieterbezogene Grants, RLS und die Bereitstellung der Rate-Limit-Funktion anpassen.
+- [ ] HTTPS-Adressen, Konfiguration und SMTP bei einem Hostingwechsel prüfen; aktive PHP-Sessions dürfen dabei beendet werden.
+
+Ein Wechsel zu einem anderen PostgreSQL-Anbieter benötigt voraussichtlich weniger Anpassungen als ein Wechsel zu MariaDB. Die eigene Benutzertabelle reduziert die Bindung an den Anmeldedienst, beseitigt aber nicht alle Unterschiede zwischen Datenbanken und Hostingangeboten.
+
+## Projektstruktur
 
 ```text
-plan.md
-.gitignore
-sql/
-  001_profiles.sql
 app/
   bootstrap.php
-  supabase.php
   auth.php
+  admin.php
+  mail.php
   csrf.php
+  user-store.php
+  supabase-http-store.php
+bin/
+  create-user.php
 config/
+  .htaccess
   config.example.php
-  config.local.php       # lokale Werte, nicht versionieren
-public/                 # nur dieser Ordner ist öffentlich
+  mail.example.php
+  mail.local.php            # ignoriert; vorbereitete SMTP-Konfiguration, derzeit nicht benötigt
+  config.local.php          # ignoriert; Server-Schlüssel
+  database.local.txt        # ignoriert; nur lokal, Datenbankzugang
+  ftp.local.txt             # ignoriert; nur lokal, Bereitstellungszugang
+  first-login.local.txt     # falls erzeugt: ignoriert; niemals hochladen
+public/
   index.php
   login.php
   profile.php
+  admin.php
+  admin-user.php
+  admin-delete.php
   logout.php
-  assets/
+  password.php
+  register.php
+  confirm.php
+  assets/style.css
+  assets/confirmation.js
+sql/
+  001_users.sql
+  002_registration.sql
+  003_registration_without_confirmation.sql
+  004_admin.sql
+tests/
+  auth-flow.mjs
+  database-security.sql
+  registration-flow.mjs
+  registration-security.sql
+  mail-transport.mjs
+  admin-flow.mjs
+  admin-security.sql
+composer.json
+composer.lock
 ```
 
-Die endgültige Ablage von `app` und `config` hängt vom zugänglichen Verzeichnisaufbau bei World4You ab. `ftp.txt`, `config.local.php`, temporäre Diagnosedateien und Logs in `.gitignore` berücksichtigen. Für Uploads ausschließlich die vorgesehenen Anwendungsdateien auswählen; nicht den gesamten Projektordner hochladen.
+## Bereitstellung und Abnahme
 
-## Schritt 6: Bereitstellung und Abnahme
+- [x] Eigenes Zielverzeichnis `supabase-test` und FTPS mit Zertifikatsprüfung verwenden.
+- [x] Datenbankmigration vor dem Anwendungswechsel ausführen und prüfen.
+- [x] Ausschließlich erforderliche Anwendungsdateien und geschützte Konfiguration hochladen.
+- [x] Das ungenutzte frühere `app/supabase.php` nach dem Wechsel entfernen.
+- [x] Über HTTPS korrekten/falschen Login, direkten Zugriffsschutz, Cookies, CSRF und Logout prüfen.
+- [x] Zugriff auf `app/` und `config/` einschließlich lokaler Konfiguration weiterhin mit HTTP 403 prüfen.
+- [x] Sicherstellen, dass SQL, CLI-Werkzeuge, Testhilfen und lokale Zugangsdaten nicht bereitgestellt wurden.
 
-- [ ] Verbindung und Zielpfad anhand der lokalen `ftp.txt` prüfen; wenn verfügbar verschlüsselt per FTPS oder SFTP übertragen.
-- [ ] Website in einem eigenen Testverzeichnis bereitstellen und HTTPS-Aufruf prüfen.
-- [ ] Richtige Anmeldung funktioniert, falsches Passwort wird mit allgemeiner Fehlermeldung abgewiesen.
-- [ ] Geschützte Seiten sind ohne Anmeldung auch über ihre direkte URL nicht erreichbar.
-- [ ] Ein erneuter Seitenaufruf erhält die Anmeldung; Ablauf und Token-Erneuerung funktionieren.
-- [ ] Benutzer A kann sein Profil lesen und ändern. Benutzer B kann weder über die Oberfläche noch über manipulierte API-Anfragen auf das Profil von A zugreifen.
-- [ ] Auch ein Zugriff ohne Benutzer-Token erhält keine privaten Profile.
-- [ ] Logout, abgelaufene Session und ungültiges Refresh Token führen zuverlässig zur erneuten Anmeldung.
-- [ ] CSRF-Schutz und HTML-Escaping anhand konkreter Fehlversuche prüfen.
-- [ ] Konfiguration, Zugangsdaten und Logs sind über HTTP nicht abrufbar; temporäre Testskripte entfernen.
-
-Nach jeder Etappe kurz festhalten: Was wurde gebaut? Welche Anfrage läuft wohin? Welche Daten liegen im Browser, auf dem Webspace und bei Supabase? Wie wurde der Schritt überprüft?
+Keine Passwörter, Datenbankverbindungsstrings oder Secret-Keys in Git, Logs oder diesen Plan aufnehmen. Alle Dateien nach dem Muster `config/*.local.*` bleiben ignoriert. Beim Upload aus `config/` ausschließlich `.htaccess` und die notwendige `config.local.php` auswählen; die übrigen lokalen Zugangsdaten niemals hochladen. `.gitignore` schützt nicht vor FTP-Uploads.
 
 ## Nächster konkreter Schritt
 
-Als Nächstes einen bestätigten Testbenutzer im Supabase-Dashboard anlegen und Login, geschützte Seite und Logout umsetzen. PHP-Grundgerüst, lokale Konfiguration, Hosting-Verbindungstest und Session-Test sind bereits erfolgreich bereitgestellt. Anmeldung und Profiltabelle sind noch nicht implementiert.
+Nach erneuter Anmeldung mit dem bisherigen Erstzugang die Benutzerverwaltung unter https://meuse24.info/supabase-test/public/admin.php öffnen. Dort stehen vollständiges CRUD, Rollenvergabe und administratives Passwort-Neusetzen bereit. SMTP und der optionale Bestätigungsablauf bleiben deaktiviert. Ein öffentlicher „Passwort vergessen“-Ablauf ist noch offen und benötigt einen gesondert eingerichteten Versandweg; davor den gewünschten Mailversand mit dem Benutzer klären.
 
 ## Quellen
 
-- [Geprüfte PHP-Konfiguration des Webspace](https://meuse24.info/phpinfo.php)
-- [Supabase: Preise und Free-Tarif](https://supabase.com/pricing)
-- [Supabase: Data REST API](https://supabase.com/docs/guides/api)
+- [PHP: password_hash](https://www.php.net/manual/en/function.password-hash.php)
+- [PHP: password_verify](https://www.php.net/manual/en/function.password-verify.php)
+- [PHP: password_needs_rehash](https://www.php.net/manual/en/function.password-needs-rehash.php)
+- [Supabase: Daten-API](https://supabase.com/docs/guides/api)
 - [Supabase: API-Schlüssel](https://supabase.com/docs/guides/getting-started/api-keys)
-- [Supabase: Passwortbasierte Anmeldung](https://supabase.com/docs/guides/auth/passwords)
-- [Supabase: Sessions](https://supabase.com/docs/guides/auth/sessions)
-- [Supabase: Eigene Benutzerdaten](https://supabase.com/docs/guides/auth/managing-user-data)
 - [Supabase: Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Supabase: SMTP und Einschränkungen des eingebauten Mailversands](https://supabase.com/docs/guides/auth/auth-smtp)
+- [Supabase: PostgreSQL-Verbindungen](https://supabase.com/docs/guides/database/connecting-to-postgres)

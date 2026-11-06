@@ -4,7 +4,9 @@ declare(strict_types=1);
 ini_set('display_errors', '0');
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
-session_name('sb_learning');
+ini_set('session.gc_maxlifetime', '1800');
+// Invalidate browser sessions from the previous Supabase Auth implementation.
+session_name('php_users');
 session_set_cookie_params([
     'lifetime' => 0,
     'path' => rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/') . '/',
@@ -30,4 +32,9 @@ function escape(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-require __DIR__ . '/supabase.php';
+require __DIR__ . '/user-store.php';
+require __DIR__ . '/admin.php';
+require __DIR__ . '/supabase-http-store.php';
+require __DIR__ . '/csrf.php';
+require __DIR__ . '/auth.php';
+require __DIR__ . '/mail.php';

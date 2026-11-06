@@ -1,7 +1,8 @@
 # Lokale Zugangsdaten und Konfiguration
 /ftp.txt
 /supabase.txt
-/config/config.local.php
+/config/*.local.*
+/app/vendor/
 .env
 .env.*
 !.env.example

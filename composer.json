@@ -1,0 +1,16 @@
+{
+    "name": "learning/php-postgres-auth",
+    "description": "PHP learning project with provider-independent authentication",
+    "type": "project",
+    "require": {
+        "php": ">=8.4",
+        "ext-curl": "*",
+        "ext-openssl": "*",
+        "phpmailer/phpmailer": "^7.1"
+    },
+    "config": {
+        "vendor-dir": "app/vendor",
+        "sort-packages": true,
+        "allow-plugins": false
+    }
+}
